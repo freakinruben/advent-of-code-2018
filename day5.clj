@@ -31,13 +31,10 @@
   (distinct (clojure.string/lower-case polymer)))
 
 (defn filter-unit "Removes the given unit from the given polymer" [polymer unit]
-  (let [upper-case-unit (Character/toUpperCase unit)]
-    (remove #{unit upper-case-unit} polymer)))
-;   (->> polymer
-;        (filter #(not= unit (clojure.string/lower-case %1)))
-;        clojure.string/join))
+  (remove #{unit (Character/toUpperCase unit)} polymer))
 
-(defn remove-unit-and-react [polymer unit] (react-polymer (filter-unit polymer unit)))
+(defn remove-unit-and-react [polymer unit]
+  (react-polymer (filter-unit polymer unit)))
 
 (defn find-optimal-reaction [input]
   (let [units (unique-units input)
