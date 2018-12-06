@@ -62,7 +62,7 @@
          (filter #(not (infinites  %))) ; remove infinte coordinates
          frequencies ; count each coordinate
          (sort-by val >) ; sort them so we can take the largest
-         (take 3))))
+         first)))
 
 ; (def example [[1 1] [1 6] [8 3] [3 4] [5 5] [8 9]])
 ; (def example-map {nil :. [1 1] :a [1 6] :b [8 3] :c [3 4] :d [5 5] :e [8 9] :f})
@@ -80,3 +80,27 @@
 ;               (swap! output str (-> coordinate example-map name clojure.string/upper-case))
 ;               (swap! output str (-> coordinate example-map name))))))
 ;     (println @output)))
+
+;; part 1:
+; (time (find-largest-area coordinates))
+; "Elapsed time: 63924.808514 msecs"
+; [(241 157) 3882]
+
+(defn calculate-total-distance [location coordinates]
+  (let [distances (zipmap coordinates
+                          (map #(manhattan-distance location %) coordinates))
+        total (->> distances (map val) (reduce +))]
+    [location total]))
+
+(defn find-region-in-range [coordinates total-distance]
+  (let [boundaries (find-boundaries coordinates)
+        locations (generate-locations boundaries)
+        valid (->> locations
+                   (map #(calculate-total-distance % coordinates))
+                   (filter #(-> % second (< total-distance)))
+                   (map first))]
+    valid))
+
+; (time (count (find-region-in-range coordinates 10000)))
+; "Elapsed time: 68164.470003 msecs"
+; 43852
