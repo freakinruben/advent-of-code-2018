@@ -90,12 +90,8 @@
           (recur (rest minutes)
                  (conj result [minute asleep])))))))
 
-(defn get-most-sleepy-minute [shifts])
-
-
 (defn part1 [input]
-  (let [shifts-per-guard (->> input
-                              (group-by :guard))
+  (let [shifts-per-guard (group-by :guard input)
         most-sleepy-guard (->> shifts-per-guard
                                (map calculate-sleep)
                                (sort-by second >)
@@ -107,3 +103,22 @@
                               (sort-by second >)
                               first)]
     (* (first most-sleepy-guard) (first most-sleepy-time))))
+
+; (time (part1 input))
+; Guard: 3203
+; Minute: 44
+; "Elapsed time: 2.466575 msecs"
+; 140932
+
+(defn best-slept-minute [[guard shifts]]
+  (let [per-minute (sleep-per-minute shifts)
+        most-asleep (->> per-minute (sort-by second >) first)]
+    {:guard guard :minute (first most-asleep) :times (second most-asleep)}))
+
+(defn part2 [input]
+  (let [shifts-per-guard (group-by :guard input)
+        best-minute-per-guard (map best-slept-minute shifts-per-guard)
+        best (->> best-minute-per-guard
+                  (sort-by :times >)
+                  first)]
+    (* (:guard best) (:minute best))))
