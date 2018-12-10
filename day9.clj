@@ -70,3 +70,9 @@
 ; (time (play-game input))
 ; "Elapsed time: 937534.910285 msecs"
 ; 399645
+; "Elapsed time: 73.117999 msecs"
+; 399645
+
+; (time (play-game input2))
+; "Elapsed time: 7339.036319 msecs"
+; 3352507536
