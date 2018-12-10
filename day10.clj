@@ -35,14 +35,7 @@
   [coordinates]
   (let [x (map get-x coordinates)
         y (map get-y coordinates)]
-    [(->> x (apply min)) ;(max -50))
-     (->> y (apply min)) ;(max 0))
-     (->> x (apply max)) ;(min 50))
-     (->> y (apply max))])) ;(min 100))]))
-
-; (defn is-visible? [coordinate]
-;   (and (-> coordinate get-x  (> 0))
-;        (-> coordinate get-y (> 0))))
+    [(apply min x) (apply min y) (apply max x) (apply max y)]))
 
 (defn draw-line [[min-x min-y max-x max-y] coordinates]
   (let [coordinates (group-by get-x coordinates)]
@@ -53,10 +46,8 @@
         (recur (inc x)
                (conj line (if (get coordinates x) "#" ".")))))))
 
-(defn draw-sky [coordinates]
-  (let [;coordinates (filter is-visible? coordinates)
-        sky         (group-by get-y coordinates)
-        edges       (get-edges coordinates)
+(defn draw-sky [coordinates edges]
+  (let [sky   (group-by get-y coordinates)
         [min-x min-y max-x max-y] edges]
     (prn edges)
     (loop [y     min-y
@@ -73,14 +64,11 @@
 (defn draw-and-ask [coordinates]
   (loop [coordinates coordinates
          iteration   0]
-    (let [visible coordinates ;(->> coordinates (filter #(-> % get-y (between? -10 100))) (filter #(-> % get-x (between? -150 150))))]
-          edges   (get-edges coordinates)]
-      (when (= 0 (mod iteration 500))
-        (prn "iteration" iteration edges))
+    (let [edges  (get-edges coordinates)]
       (if (not (visible? edges))
         (recur (move-coordinates coordinates) (inc iteration))
         (do (prn "iteration" iteration edges)
-            (println (draw-sky visible))
+            (println (draw-sky coordinates edges))
             (prn iteration "Continue?")
             (let [continue? (read-line)]
               (when (= "y" continue?)
