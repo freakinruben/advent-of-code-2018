@@ -40,7 +40,8 @@
   nil)
 
 (defmethod execute-code :default [int-codes pointer]
-  (prn "Unknown code: " (nth int-codes @pointer)))
+  (prn "Unknown code: " (nth int-codes @pointer))
+  int-codes)
 
 (defn int-code-runner
   ([int-codes]
@@ -51,9 +52,34 @@
        int-codes
        (int-code-runner memory pointer)))))
 
-(def answer1
-  (let [input (-> @numbers
-                  (assoc 1 12)
-                  (assoc 2 2))
+(defn run [input noun verb]
+  (let [input (-> input
+                  (assoc 1 noun)
+                  (assoc 2 verb))
         memory (int-code-runner input)]
     (first memory)))
+
+(def answer1 (run @numbers 12 2))
+
+(defn find-verb [input desired-result max-loop noun]
+  (loop [verbs (range 0 max-loop)]
+    (when-let [verb (first verbs)]
+      (let [result (run input noun verb)]
+        ; (prn noun verb result)
+        (if (= desired-result result)
+          {:noun noun :verb (first verbs)}
+          (recur (rest verbs)))))))
+
+(defn find-noun-verb [input desired-result max-loop]
+  (loop [nouns (range 0 max-loop)]
+    (when-let [noun (first nouns)]
+      (let [result (find-verb input desired-result max-loop noun)]
+        (if (map? result)
+          result
+          (recur (rest nouns)))))))
+
+(def answer2
+  (delay
+   (let [result (find-noun-verb @numbers 19690720 70)]
+     (+ (* 100 (:noun result))
+        (:verb result)))))
