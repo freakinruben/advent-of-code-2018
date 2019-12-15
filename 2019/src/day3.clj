@@ -35,24 +35,24 @@
   (fn [_ direction] (first direction)))
 
 (defmethod draw-line "R" [last-line direction]
-  (let [[_ _ [x2 y2 :as p2]] last-line
+  (let [[_ _ [x2 y2 :as p2] total-steps] last-line
         [_ steps] direction]
-    [:hor p2 [(+ x2 steps) y2]]))
+    [:hor p2 [(+ x2 steps) y2] (+ total-steps steps)]))
 
 (defmethod draw-line "L" [last-line direction]
-  (let [[_ _ [x2 y2 :as p2]] last-line
+  (let [[_ _ [x2 y2 :as p2] total-steps] last-line
         [_ steps] direction]
-    [:hor p2 [(- x2 steps) y2]]))
+    [:hor p2 [(- x2 steps) y2] (+ total-steps steps)]))
 
 (defmethod draw-line "D" [last-line direction]
-  (let [[_ _ [x2 y2 :as p2]] last-line
+  (let [[_ _ [x2 y2 :as p2] total-steps] last-line
         [_ steps] direction]
-    [:ver p2 [x2 (+ y2 steps)]]))
+    [:ver p2 [x2 (+ y2 steps)] (+ total-steps steps)]))
 
 (defmethod draw-line "U" [last-line direction]
-  (let [[_ _ [x2 y2 :as p2]] last-line
+  (let [[_ _ [x2 y2 :as p2] total-steps] last-line
         [_ steps] direction]
-    [:ver p2 [x2 (- y2 steps)]]))
+    [:ver p2 [x2 (- y2 steps)] (+ total-steps steps)]))
 
 (defmethod draw-line :default [_ direction]
   (prn "Unknown direction:" direction))
@@ -61,7 +61,7 @@
   (loop [drawing []
          directions directions]
     (if (seq directions)
-      (let [line (draw-line (or (last drawing) [nil nil [0 0]])
+      (let [line (draw-line (or (last drawing) [nil nil [0 0] 0]) ; :hor/ver :start :end :steps
                             (first directions))]
         (recur (conj drawing line)
                (rest directions)))
@@ -75,13 +75,13 @@
   (< x2 x1 x3))
 
 (defn get-line-intersection
-  [[_ [x1 y1] [x2 _]]   ; hor-line
-   [_ [x3 y3] [_  y4]]] ; ver-line
+  [[_ [x1 y1] [x2 _]  :as hor-line]
+   [_ [x3 y3] [_  y4] :as ver-line]]
   (let [[min-x max-x] (sort [x1 x2])
         [min-y max-y] (sort [y3 y4])]
     (when (and (<= min-x x3 max-x)
                (<= min-y y1 max-y))
-      [x3 y1])))
+      [[x3 y1] hor-line ver-line])))
 
 (defn !nil? [x]
   (not= x nil))
@@ -102,6 +102,10 @@
                (apply concat []))]
     (concat a b)))
 
+;
+; answer 1
+;
+
 (defn manhatten-distance [coordinate-a coordinate-b]
   (+ (Math/abs (- (first coordinate-a) (first coordinate-b)))
      (Math/abs (- (second coordinate-a) (second coordinate-b)))))
@@ -110,8 +114,30 @@
   (let [wire1 (draw-wire (first input))
         wire2 (draw-wire (second input))]
     (->> (find-wire-intersections wire1 wire2)
-         (map #(manhatten-distance % [0 0]))
+         (map #(manhatten-distance (first %) [0 0]))
          sort
          first)))
 
 (def answer1 (-> @input find-closest-intersection delay))
+
+; 
+; answer 2
+;
+
+(defn calc-steps-distance [[intersection-x intersection-y] [direction _ [end-x end-y] steps]]
+  (condp = direction
+    :ver (- steps (Math/abs (- intersection-y end-y)))
+    :hor (- steps (Math/abs (- intersection-x end-x)))))
+
+(defn steps-distance [[intersection line-a line-b]]
+  (let [distance-a (calc-steps-distance intersection line-a)
+        distance-b (calc-steps-distance intersection line-b)]
+    (+ distance-a distance-b)))
+
+(defn find-intersection-with-least-steps [input]
+  (let [wire1 (draw-wire (first input))
+        wire2 (draw-wire (second input))]
+    (->> (find-wire-intersections wire1 wire2)
+         (map steps-distance)
+         sort
+         first)))
