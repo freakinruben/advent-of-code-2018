@@ -20,6 +20,7 @@
 (def input "307237-769058")
 
 (defn parse-int [i] (Integer/parseInt i))
+(defn !nil? [x] (not= x nil))
 
 (defn parse-input [in]
   (map parse-int (clojure.string/split in #"-")))
@@ -50,16 +51,36 @@
        (map split-nr)
        (filter digits-increase?)
        (filter same-adjecent-digits?)
-       doall
-       time))
+       doall))
 
 (defn make-password-combinations [[start end]]
   (let [all (range start end)]
     (->> all
          (partition-all 10000)
          (pmap find-password-combis)
-         (map count)
-         (reduce +)
-         time)))
+         doall)))
 
-(def answer1 (-> input parse-input make-password-combinations delay))
+(def answer1
+  (->> (-> input parse-input make-password-combinations)
+       (map count)
+       (reduce +)
+       time
+       delay))
+
+(defn two-digits-group? [nr-list]
+  (->> nr-list
+       (partition-by identity)
+       (map count)
+       (filter #(= 2 %))
+       seq
+       !nil?))
+
+(def answer2
+  (->> (-> input parse-input make-password-combinations)
+       (apply concat)
+      ;  (map #(do [(two-digits-group? %) %]))
+      ;  (drop 800)
+       (filter two-digits-group?)
+       count
+       time
+       delay))
