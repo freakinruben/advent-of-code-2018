@@ -19,12 +19,10 @@
   (->> (clojure.string/split input #"")
        (map parse-int)))
 
-(defn keep-last-digit [input]
+(defn last-digit [input]
   (-> input
-      str
-      last
-      str
-      parse-int))
+      Math/abs
+      (mod 10)))
 
 ; While each element in the output array uses all of the same input array 
 ; elements, the actual repeating pattern to use depends on which output element 
@@ -66,13 +64,13 @@
       (if (and (.hasNext pattern-it) (.hasNext input-it))
         (recur (+ result
                   (* (.next pattern-it) (.next input-it))))
-        (keep-last-digit result)))))
+        (last-digit result)))))
 
 (defn run-fff-phase [input pattern]
   (->> input
        count
        get-indexes
-       (partition-all 200)
+       (partition-all 2000)
        (pmap (fn [idxs] ;(println "idxs" idxs)
                (->> idxs
                     (mapv #(calc-fff-value % pattern input)))))
@@ -81,30 +79,48 @@
 
 (def base-pattern [0 1 0 -1])
 
-(defn run-fff [input-str total-phases offset]
-  (prn "input len" (count input-str))
-  (prn "offset   " offset)
+(defn run-fff [input-str total-phases]
   (loop [phase 0
          input (time (parse-input input-str))]
-    ; (prn "begin phase" phase (count input))
+    ; (prn "begin phase" phase (count input) input)
     (if (= total-phases phase)
       (-> input clojure.string/join (subs 0 8))
       (recur (inc phase)
              (run-fff-phase input base-pattern)))))
 
-(def answer1 (delay (time (run-fff numbers 100 0))))
+(def answer1 (delay (time (run-fff numbers 100))))
 
 ; 
 ; Part 2
 ;
 
-(def example5 "0303673257721")
+(defn calc-end [input-end]
+  (loop [input-end input-end
+         out []
+         sum (reduce + input-end)]
+    (if (empty? input-end)
+      out
+      (recur (rest input-end)
+             (conj out (last-digit sum))
+             (- sum (first input-end))))))
+
+(def example5 "03036732577212944063491565474664")
 (def example6 "02935109699940807407585447034323")
 (def example7 "03081770884921959731165446850517")
 
-(defn decode-signal [input total-phases]
-  (let [offset (Integer/parseInt (subs input 0 7))
-        input  (->> input (repeat 10000) clojure.string/join time)]
-    (time (run-fff input total-phases offset))))
+(defn decode-signal [input]
+  (let [offset  (Integer/parseInt (subs input 0 7))
+        numbers (->> input
+                     parse-input
+                     (repeat 10000)
+                     (apply concat)
+                     time)]
+    (prn "input len" (count numbers))
+    (prn "offset   " offset)
+    (->> (reduce (fn [acc _] (calc-end acc)) (drop offset numbers) (range 100))
+         (take 8)
+         clojure.string/join
+         time)))
 
-(def answer2 (delay (decode-signal numbers 100)))
+(def answer2 (delay (decode-signal numbers)))
+
