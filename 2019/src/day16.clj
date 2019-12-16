@@ -54,16 +54,41 @@
          (apply +)
          keep-last-digit)))
 
+(def get-indexes
+  (memoize
+   (fn [input]
+     (range 0 (count input)))))
 
 (defn run-fff-phase [input pattern]
-  (map-indexed (fn [idx _] (calc-fff-value input idx pattern)) input))
+  (->> input
+       get-indexes
+       (pmap #(calc-fff-value input % pattern))
+       doall))
 
 (def base-pattern [0 1 0 -1])
 
 (defn run-fff [input-str total-phases]
   (loop [phase 0
-         input (parse-input input-str)]
+         input (time (parse-input input-str))]
     (if (= total-phases phase)
       (-> input clojure.string/join (subs 0 8))
       (recur (inc phase)
-             (run-fff-phase input base-pattern)))))
+             (time (run-fff-phase input base-pattern))))))
+
+(def answer1 (delay (time (run-fff numbers 100))))
+
+; 
+; Part 2
+;
+
+(def example5 "0303673257721")
+(def example6 "02935109699940807407585447034323")
+(def example7 "03081770884921959731165446850517")
+
+(defn decode-signal [input total-phases]
+  (let [offset (Integer/parseInt (subs input 0 7))
+        input  (->> input (repeat 10000) clojure.string/join time)
+        result (time (run-fff input total-phases))]
+    (subs result offset 8)))
+
+(def answer2 (delay (decode-signal numbers 100)))
