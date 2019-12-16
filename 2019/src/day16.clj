@@ -1,5 +1,7 @@
 (ns day16)
 
+; (set! *warn-on-reflection* true)
+
 (defn parse-int [i] (Integer/parseInt i))
 
 (def example1 {:in "12345678" :out "01029498"})
@@ -44,38 +46,53 @@
 
 (def make-pattern (memoize make-pattern*))
 
+(def get-indexes
+  (memoize
+   (fn [input-len]
+     (prn "indexes" input-len)
+     (range 0 input-len))))
+
 ; Each element in the new list is built by multiplying every value in the input 
 ; list by a value in a repeating pattern and then adding up the results.
 ; Then, only the ones digit is kept: 38 becomes 8, -17 becomes 7, and so on.
 
-(defn calc-fff-value [input position base-pattern]
-  (let [pattern (make-pattern base-pattern position (count input))]
-    (->> (mapv * input pattern)
-         (apply +)
-         keep-last-digit)))
-
-(def get-indexes
-  (memoize
-   (fn [input]
-     (range 0 (count input)))))
+(defn calc-fff-value [position base-pattern input]
+  (let [pattern    (make-pattern base-pattern position (count input))
+        input      (drop position input)   ; remove 0s
+        pattern    (drop position pattern) ; remove 0s
+        pattern-it (clojure.lang.RT/iter pattern)
+        input-it   (clojure.lang.RT/iter input)]
+    (loop [result (int 0)]
+      (if (and (.hasNext pattern-it) (.hasNext input-it))
+        (recur (+ result
+                  (* (.next pattern-it) (.next input-it))))
+        (keep-last-digit result)))))
 
 (defn run-fff-phase [input pattern]
   (->> input
+       count
        get-indexes
-       (pmap #(calc-fff-value input % pattern))
+       (partition-all 200)
+       (pmap (fn [idxs] ;(println "idxs" idxs)
+               (->> idxs
+                    (mapv #(calc-fff-value % pattern input)))))
+       (apply concat [])
        doall))
 
 (def base-pattern [0 1 0 -1])
 
-(defn run-fff [input-str total-phases]
+(defn run-fff [input-str total-phases offset]
+  (prn "input len" (count input-str))
+  (prn "offset   " offset)
   (loop [phase 0
          input (time (parse-input input-str))]
+    ; (prn "begin phase" phase (count input))
     (if (= total-phases phase)
       (-> input clojure.string/join (subs 0 8))
       (recur (inc phase)
-             (time (run-fff-phase input base-pattern))))))
+             (run-fff-phase input base-pattern)))))
 
-(def answer1 (delay (time (run-fff numbers 100))))
+(def answer1 (delay (time (run-fff numbers 100 0))))
 
 ; 
 ; Part 2
@@ -87,8 +104,7 @@
 
 (defn decode-signal [input total-phases]
   (let [offset (Integer/parseInt (subs input 0 7))
-        input  (->> input (repeat 10000) clojure.string/join time)
-        result (time (run-fff input total-phases))]
-    (subs result offset 8)))
+        input  (->> input (repeat 10000) clojure.string/join time)]
+    (time (run-fff input total-phases offset))))
 
 (def answer2 (delay (decode-signal numbers 100)))
