@@ -1,8 +1,8 @@
 (ns day5
-  (:require [day2 :refer [ask-input
-                          execute-code
+  (:require [day2 :refer [execute-code
                           parse-file
                           parse-int
+                          read-memory
                           run
                           read-next-arg
                           write-result]]))
@@ -16,73 +16,72 @@
        (map parse-int)
        reverse))
 
-(defn jump-pointer [pointer position]
-  (reset! pointer (dec position))) ; jump back 1 position to make sure the next execute reads from the correct location
+; jump back 1 position to make sure the next execute reads from the correct location
+(defn jump-pointer [config position]
+  (reset! (:pointer config) (dec position)))
 
 ; Opcode 3 takes a single integer as input and saves it to the position given by 
 ; its only parameter. For example, the instruction 3,50 would take an input 
 ; value and store it at address 50.
-(defmethod execute-code 3 [_ instructions pointer _]
-  (let [input (ask-input)]
-    (write-result instructions pointer input)))
+(defmethod execute-code 3 [{:keys [input] :as config} _ _]
+  (write-result config input))
 
 ; Opcode 4 outputs the value of its only parameter. For example, the instruction 
 ; 4,50 would output the value at address 50.
-(defmethod execute-code 4 [_ instructions pointer modes]
-  (prn "diagnostic-code" (read-next-arg instructions pointer (nth modes 0 0)))
-  instructions)
+(defmethod execute-code 4 [config _ modes]
+  (update-in config [:output] #(conj % (read-next-arg config modes 0))))
 
 ; Opcode 5 is jump-if-true: if the first parameter is non-zero, it sets the 
 ; instruction pointer to the value from the second parameter. Otherwise, it does 
 ; nothing.
-(defmethod execute-code 5 [_ instructions pointer modes]
-  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
-        arg2 (read-next-arg instructions pointer (nth modes 1 0))]
+(defmethod execute-code 5 [config _ modes]
+  (let [arg1 (read-next-arg config modes 0)
+        arg2 (read-next-arg config modes 1)]
     (when (> arg1 0)
-      (jump-pointer pointer arg2))
-    instructions))
+      (jump-pointer config arg2))
+    config))
 
 ; Opcode 6 is jump-if-false: if the first parameter is zero, it sets the 
 ; instruction pointer to the value from the second parameter. Otherwise, it does 
 ; nothing.
-(defmethod execute-code 6 [_ instructions pointer modes]
-  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
-        arg2 (read-next-arg instructions pointer (nth modes 1 0))]
+(defmethod execute-code 6 [config _ modes]
+  (let [arg1 (read-next-arg config modes 0)
+        arg2 (read-next-arg config modes 1)]
     (when (= arg1 0)
-      (jump-pointer pointer arg2))
-    instructions))
+      (jump-pointer config arg2))
+    config))
 
 ; Opcode 7 is less than: if the first parameter is less than the second 
 ; parameter, it stores 1 in the position given by the third parameter. 
 ; Otherwise, it stores 0.
-(defmethod execute-code 7 [_ instructions pointer modes]
-  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
-        arg2 (read-next-arg instructions pointer (nth modes 1 0))
+(defmethod execute-code 7 [config _ modes]
+  (let [arg1 (read-next-arg config modes 0)
+        arg2 (read-next-arg config modes 1)
         val  (if (< arg1 arg2) 1 0)]
-    (write-result instructions pointer val)))
+    (write-result config val)))
 
 ; Opcode 8 is equals: if the first parameter is equal to the second parameter, 
 ; it stores 1 in the position given by the third parameter. Otherwise, it 
 ; stores 0.
-(defmethod execute-code 8 [_ instructions pointer modes]
-  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
-        arg2 (read-next-arg instructions pointer (nth modes 1 0))
+(defmethod execute-code 8 [config _ modes]
+  (let [arg1 (read-next-arg config modes 0)
+        arg2 (read-next-arg config modes 1)
         val  (if (= arg1 arg2) 1 0)]
-    (write-result instructions pointer val)))
+    (write-result config val)))
 
-(defmethod execute-code :default [_ instructions pointer _]
-  (let [[opcode _ & param-modes :as all] (parse-opcode (nth instructions @pointer))]
+(defmethod execute-code :default [{:keys [pointer] :as config} _ _]
+  (let [[opcode _ & param-modes :as all] (parse-opcode (read-memory config @pointer))]
     (try
       (assert (= param-modes
                  (->> param-modes
-                      (filter #(< % 2))
+                      (filter #(< % 3))
                       seq)))
-      (assert (< 0 opcode 9))
-      (execute-code opcode instructions pointer param-modes)
+      (assert (< 0 opcode 10))
+      (execute-code config opcode param-modes)
 
       (catch Throwable e
         (println "Error:" (ex-data e))
-        (println (str "\tUnknown code at " @pointer ": " (nth instructions @pointer)))
+        (println (str "\tUnknown code at " @pointer ": " (read-memory config @pointer)))
         (println (str "\topcode: " opcode "; params: " param-modes "; all: " all))
         (throw e)))))
 
@@ -95,5 +94,5 @@
 ; mode. In immediate mode, a parameter is interpreted as a value - if the 
 ; parameter is 50, its value is simply 50.
 
-(def answer1 (delay (run @numbers 1)))
-(def answer2 (delay (run @numbers 5)))
+(def answer1 (-> @numbers (run 1) first delay))
+(def answer2 (-> @numbers (run 5) first delay))
