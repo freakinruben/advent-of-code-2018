@@ -48,9 +48,7 @@
     (assoc-in config [:instructions write-loc] val)))
 
 (defmulti execute-code
-  (fn [config code _]
-    (or code
-        (next-instruction config))))
+  (fn [_ code _] code))
 
 (defmethod execute-code 1 [config _ modes]
   (let [arg1 (read-next-arg config modes 0)
@@ -80,11 +78,29 @@
 (defn memory-to-vec [memory]
   (->> memory (sort-by key) (map second)))
 
+(defn parse-opcode* [opcode]
+  (->> opcode
+       str
+       (#(clojure.string/split % #""))
+       (map parse-int)
+       reverse))
+
+(def parse-opcode (memoize parse-opcode*))
+
+(defn next-opcode [config]
+  (let [opcode (next-instruction config)]
+    (assert (< 0 opcode))
+    (if (or (< opcode 10) (= 99 opcode))
+      [opcode]
+      (parse-opcode opcode))))
+
 (defn int-code-runner [config]
-  (let [{:keys [halted] :as result} (execute-code config nil nil)]
-    (if halted
-      (select-keys result [:output :instructions])
-      (int-code-runner result))))
+  (loop [config config]
+    (let [[opcode _ & parameter-modes] (next-opcode config)
+          result (execute-code config opcode parameter-modes)]
+      (if (:halted result)
+        (select-keys result [:output :instructions])
+        (recur result)))))
 
 (defn run
   ([instructions]

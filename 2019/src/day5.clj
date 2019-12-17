@@ -1,20 +1,11 @@
 (ns day5
   (:require [day2 :refer [execute-code
                           parse-file
-                          parse-int
-                          read-memory
                           run
                           read-next-arg
                           write-result]]))
 
 (def numbers (delay (parse-file "input5.txt")))
-
-(defn parse-opcode [opcode]
-  (->> opcode
-       str
-       (#(clojure.string/split % #""))
-       (map parse-int)
-       reverse))
 
 ; jump back 1 position to make sure the next execute reads from the correct location
 (defn jump-pointer [config position]
@@ -75,23 +66,6 @@
         val  (if (= arg1 arg2) 1 0)]
     ; (println "=" val "\n")
     (write-result config val modes 2)))
-
-(defmethod execute-code :default [{:keys [pointer] :as config} _ _]
-  (let [[opcode _ & param-modes :as all] (parse-opcode (read-memory config @pointer))]
-    (try
-      (assert (= param-modes
-                 (->> param-modes
-                      (filter #(< % 3))
-                      seq)))
-      (assert (< 0 opcode 10))
-      ; (prn "execute" (read-memory config @pointer) "=>" all)
-      (execute-code config opcode param-modes)
-
-      (catch Throwable e
-        (println "Error:" (ex-data e))
-        (println (str "\tUnknown code at " @pointer ": " (read-memory config @pointer)))
-        (println (str "\topcode: " opcode "; params: " param-modes "; all: " all))
-        (throw e)))))
 
 ; Your ship computer already understands parameter mode 0, position mode, 
 ; which causes the parameter to be interpreted as a position - if the parameter 

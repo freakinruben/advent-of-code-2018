@@ -30,3 +30,4 @@
   (prn "example 3 prints large nr in middle?" (run example3)))
 
 (def answer1 (-> @numbers (run 1) :output first delay))
+(def answer2 (-> @numbers (run 2) :output delay))
