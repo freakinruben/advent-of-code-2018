@@ -1,3 +1,4 @@
+(ns day1)
 
 ; Fuel required to launch a given module is based on its mass. Specifically,
 ; to find the fuel required for a module,
