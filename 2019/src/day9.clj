@@ -1,5 +1,6 @@
 (ns day9
   (:require [day2 :refer [execute-code
+                          memory-to-vec
                           parse-codes
                           parse-file
                           run
@@ -13,6 +14,7 @@
 ; of the parameter.
 (defmethod execute-code 9 [{:keys [relative-base] :as config} _ modes]
   (let [arg1 (read-next-arg config modes 0)]
+    ; (println "set relative base" relative-base arg1 modes "\n")
     (assoc config :relative-base (+ relative-base arg1))))
 
 (def example1 (parse-codes "109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99"))
@@ -21,7 +23,10 @@
 
 (defn run-tests []
   (let [run1 (run example1)]
-    (assert (= example1
-               (->> run1 (take (count example1)) (zipmap (range))))))
+    (prn run1)
+    (assert (= (memory-to-vec example1)
+               (:output run1))))
   (prn "example 2 prints 16-digit nr?" (run example2))
   (prn "example 3 prints large nr in middle?" (run example3)))
+
+(def answer1 (-> @numbers (run 1) :output first delay))

@@ -37,8 +37,14 @@
       2 (read-memory config (+ relative-base next)))))
 
 ; Parameters that an instruction writes to will never be in immediate mode.
-(defn write-result [config val]
-  (let [write-loc (next-instruction config)]
+(defn write-result [config val modes mode-pos]
+  (assert (not= nil val))
+  (let [next      (next-instruction config)
+        write-loc (condp = (nth modes mode-pos 0)
+                    0 next
+                    1 next
+                    2 (+ (:relative-base config) next))]
+    ; (println "\twrite" next "->" write-loc "=>" val "; modes: " modes "; mode-pos" mode-pos)
     (assoc-in config [:instructions write-loc] val)))
 
 (defmulti execute-code
@@ -50,13 +56,15 @@
   (let [arg1 (read-next-arg config modes 0)
         arg2 (read-next-arg config modes 1)
         val (+ arg1 arg2)]
-    (write-result config val)))
+    ; (println "+" val "\n")
+    (write-result config val modes 2)))
 
 (defmethod execute-code 2 [config _ modes]
   (let [arg1 (read-next-arg config modes 0)
         arg2 (read-next-arg config modes 1)
         val (* arg1 arg2)]
-    (write-result config val)))
+    ; (println "*" val "\n")
+    (write-result config val modes 2)))
 
 (defmethod execute-code 99 [config _ _]
   (assoc config :halted true))
@@ -73,11 +81,9 @@
   (->> memory (sort-by key) (map second)))
 
 (defn int-code-runner [config]
-  (let [{:keys [halted output] :as result} (execute-code config nil nil)]
+  (let [{:keys [halted] :as result} (execute-code config nil nil)]
     (if halted
-      (do (when (seq output)
-            (prn "output" output))
-          (-> result :instructions memory-to-vec))
+      (select-keys result [:output :instructions])
       (int-code-runner result))))
 
 (defn run
@@ -95,12 +101,12 @@
                           (assoc 2 verb))]
      (run instructions))))
 
-(def answer1 (-> @numbers (run 12 2) first delay))
+(def answer1 (-> @numbers (run 12 2) :instructions (get 0) delay))
 
 (defn find-verb [input desired-result max-loop noun]
   (loop [verbs (range 0 max-loop)]
     (when-let [verb (first verbs)]
-      (let [result (first (run input noun verb))]
+      (let [result (-> input (run noun verb) :instructions (get 0))]
         (if (= desired-result result)
           {:noun noun :verb (first verbs)}
           (recur (rest verbs)))))))
