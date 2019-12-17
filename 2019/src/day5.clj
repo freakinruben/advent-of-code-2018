@@ -1,19 +1,13 @@
 (ns day5
-  (:require [day2 :refer [execute-code
-                          parse
+  (:require [day2 :refer [ask-input
+                          execute-code
+                          parse-file
                           parse-int
                           run
                           read-next-arg
                           write-result]]))
 
-(def numbers (delay (parse "input5.txt")))
-
-(defn ask-input* []
-  (prn "Input code:")
-  (flush)
-  (parse-int (read-line)))
-
-(def ask-input (memoize ask-input*))
+(def numbers (delay (parse-file "input5.txt")))
 
 (defn parse-opcode [opcode]
   (->> opcode
@@ -21,6 +15,9 @@
        (#(clojure.string/split % #""))
        (map parse-int)
        reverse))
+
+(defn jump-pointer [pointer position]
+  (reset! pointer (dec position))) ; jump back 1 position to make sure the next execute reads from the correct location
 
 ; Opcode 3 takes a single integer as input and saves it to the position given by 
 ; its only parameter. For example, the instruction 3,50 would take an input 
@@ -35,6 +32,44 @@
   (prn "diagnostic-code" (read-next-arg instructions pointer (nth modes 0 0)))
   instructions)
 
+; Opcode 5 is jump-if-true: if the first parameter is non-zero, it sets the 
+; instruction pointer to the value from the second parameter. Otherwise, it does 
+; nothing.
+(defmethod execute-code 5 [_ instructions pointer modes]
+  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
+        arg2 (read-next-arg instructions pointer (nth modes 1 0))]
+    (when (> arg1 0)
+      (jump-pointer pointer arg2))
+    instructions))
+
+; Opcode 6 is jump-if-false: if the first parameter is zero, it sets the 
+; instruction pointer to the value from the second parameter. Otherwise, it does 
+; nothing.
+(defmethod execute-code 6 [_ instructions pointer modes]
+  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
+        arg2 (read-next-arg instructions pointer (nth modes 1 0))]
+    (when (= arg1 0)
+      (jump-pointer pointer arg2))
+    instructions))
+
+; Opcode 7 is less than: if the first parameter is less than the second 
+; parameter, it stores 1 in the position given by the third parameter. 
+; Otherwise, it stores 0.
+(defmethod execute-code 7 [_ instructions pointer modes]
+  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
+        arg2 (read-next-arg instructions pointer (nth modes 1 0))
+        val  (if (< arg1 arg2) 1 0)]
+    (write-result instructions pointer val)))
+
+; Opcode 8 is equals: if the first parameter is equal to the second parameter, 
+; it stores 1 in the position given by the third parameter. Otherwise, it 
+; stores 0.
+(defmethod execute-code 8 [_ instructions pointer modes]
+  (let [arg1 (read-next-arg instructions pointer (nth modes 0 0))
+        arg2 (read-next-arg instructions pointer (nth modes 1 0))
+        val  (if (= arg1 arg2) 1 0)]
+    (write-result instructions pointer val)))
+
 (defmethod execute-code :default [_ instructions pointer _]
   (let [[opcode _ & param-modes :as all] (parse-opcode (nth instructions @pointer))]
     (try
@@ -42,7 +77,7 @@
                  (->> param-modes
                       (filter #(< % 2))
                       seq)))
-      (assert (< 0 opcode 5))
+      (assert (< 0 opcode 9))
       (execute-code opcode instructions pointer param-modes)
 
       (catch Throwable e
@@ -60,4 +95,5 @@
 ; mode. In immediate mode, a parameter is interpreted as a value - if the 
 ; parameter is 50, its value is simply 50.
 
-(def answer1 (delay (run @numbers)))
+(def answer1 (delay (run @numbers 1)))
+(def answer2 (delay (run @numbers 5)))
