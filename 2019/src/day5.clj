@@ -14,9 +14,18 @@
 ; Opcode 3 takes a single integer as input and saves it to the position given by 
 ; its only parameter. For example, the instruction 3,50 would take an input 
 ; value and store it at address 50.
+; 
+; Input can be either a single value or a list. In case of a list, it will read
+; the first item from the list and then remove it from the available inputs
 (defmethod execute-code 3 [{:keys [input] :as config} _ modes]
-  ; (println "write input" input "\n")
-  (write-result config input modes 0))
+  (assert (not= nil input))
+  (if (seq input)
+    ; (do (println "write input" (first input) "\n")
+    (-> config
+        (write-result (first input) modes 0)
+        (assoc :input (rest input))) ; remove read item from input
+    ; (do (println "write input" input "\n")
+    (write-result config input modes 0)))
 
 ; Opcode 4 outputs the value of its only parameter. For example, the instruction 
 ; 4,50 would output the value at address 50.
