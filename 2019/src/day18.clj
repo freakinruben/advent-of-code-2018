@@ -159,14 +159,17 @@
       ;   (-> door unfound not))))
       (-> pos :symbol clojure.string/lower-case unfound not)))
 
-(defn distance-to-other-keys [])
+(defn distance-to-other-keys
+  "Calculates the distance from 1 key to all the other unfound keys"
+  [unfound-key-tiles from-key]
+  (loop [queue unfound-key-tiles]))
 
 (defn get-closest-key-distance
   "Calculates the manhatten distance to each key for the given tile. Keys that
    are already found will be ignored"
   [{:keys [keys]} tile unfound]
-  (let [unfound-keys (filter #(-> % :symbol unfound) keys)]
-    (->> unfound-keys
+  (let [unfound-key-tiles (filter #(-> % :symbol unfound) keys)]
+    (->> unfound-key-tiles
          (map #(manhattan-distance % tile))
       ;  (map #(let [dis (manhattan-distance % tile)]
       ;          (prn [(:x tile) (:y tile)] "=>" [(:x %) (:y %)] (:symbol %) "=" dis)
@@ -341,3 +344,7 @@
       time))
 
 (def answer1 (delay (find-shortest-path @input-map)))
+
+(def example1 (delay (find-shortest-path (parse-file "example18a.txt")))) ; 132
+(def example2 (delay (find-shortest-path (parse-file "example18b.txt")))) ; 136
+(def example3 (delay (find-shortest-path (parse-file "example18c.txt")))) ; 81
