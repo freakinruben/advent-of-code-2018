@@ -66,6 +66,28 @@
                         (assoc cur :symbol "#" :is-open? false :neighbours nil)))))
       output)))
 
+(defn manhattan-distance* [point1 point2]
+  (+ (Math/abs (- (:x point1)
+                  (:x point2)))
+     (Math/abs (- (:y point1)
+                  (:y point2)))))
+
+(def manhattan-distance (memoize manhattan-distance*))
+
+(defn add-distances-to-keys
+  "calculates the distance for each key to all the other keys"
+  [keys]
+  (map (fn [key]
+         (assoc key
+                :distance-to
+                (->> keys
+                     (filter #(not= key %))
+                     (reduce #(assoc %1
+                                     (:symbol %2)
+                                     (manhattan-distance key %2))
+                             {}))))
+       keys))
+
 (defn parse-map [map-str]
   (let [map-width (.indexOf map-str "\n")
         tiles (->> map-str
@@ -77,8 +99,10 @@
                      (close-dead-ends map-width)
                      (add-neighbours map-width))
      :map-width map-width
-     :max-iters 20000 ; (* 50 (count map-str))
-     :keys      (filter #(-> % :symbol is-symbol-key?) tiles)
+     :max-iters 50000 ; (* 50 (count map-str))
+     :keys      (->> tiles
+                     (filter #(-> % :symbol is-symbol-key?))
+                     add-distances-to-keys)
     ;  :keys #{"a" "b" "c"}
      }))
 
@@ -135,34 +159,27 @@
       ;   (-> door unfound not))))
       (-> pos :symbol clojure.string/lower-case unfound not)))
 
-(defn manhattan-distance [point1 point2]
-  (+ (Math/abs (- (:x point1)
-                  (:x point2)))
-     (Math/abs (- (:y point1)
-                  (:y point2)))))
+(defn distance-to-other-keys [])
 
 (defn get-closest-key-distance
   "Calculates the manhatten distance to each key for the given tile. Keys that
    are already found will be ignored"
-  [{:keys [keys]} tile unfound-keys]
-  (->> keys
-       (filter #(-> % :symbol unfound-keys)) ; remove found keys
-      ;  (map #(dec (manhattan-distance % tile)))
-       (map #(manhattan-distance % tile))
+  [{:keys [keys]} tile unfound]
+  (let [unfound-keys (filter #(-> % :symbol unfound) keys)]
+    (->> unfound-keys
+         (map #(manhattan-distance % tile))
       ;  (map #(let [dis (manhattan-distance % tile)]
       ;          (prn [(:x tile) (:y tile)] "=>" [(:x %) (:y %)] (:symbol %) "=" dis)
       ;          dis))
-       sort
-       first))
+         sort
+         first)))
 
 (defn accessible-neighbours
   "returns neighbours that are accessible for walking"
-  [{:keys [input-map] :as config} {:keys [idx previous unfound walked] :as state} pos]
+  [{:keys [input-map] :as config} {:keys [previous unfound walked] :as state} pos]
   (->> (:neighbours pos)
-      ;  (filter #(or (not (previous %))         ; don't go back
-      ;               (is-new-key? state pos))) ; unless we found a key
        (filter #(-> % previous not))           ; don't go back
-       (map #(get input-map % nil))           ; get neighbour data
+       (map #(get input-map %))               ; get neighbour data
        (filter (partial is-open? state))       ; filter out closed doors
        (map #(let [goal-distance (or (get-closest-key-distance config % unfound)
                                      0)
@@ -177,39 +194,59 @@
       ;  (sort-by :estimated-cost)
        ))
 
-(defn add-new-items [coll new-items]
-  ; (let [new (filter #(= -1 (.indexOf coll %)) new-items)]
-  (let [coll (remove (set new-items) coll)]
-    (->> new-items
-      ;  (remove (set coll))
-         (concat coll)
-         (sort-by :estimated-cost)
-         doall)))
+; (defn add-new-items [coll new-items]
+;   ; (let [new (filter #(= -1 (.indexOf coll %)) new-items)]
+;   (let [coll (remove (set new-items) coll)]
+;     (->> new-items
+;       ;  (remove (set coll))
+;          (concat coll)
+;          (sort-by :estimated-cost)
+;          doall)))
+
+(defn estimated-cost-sort [x y]
+  ; (prn "sort" x y (compare (:estimated-cost x) (:estimated-cost y)))
+  (if (= x y)
+    0
+    (let [c (compare (:estimated-cost x) (:estimated-cost y))]
+      (if (not= 0 c)
+        c
+        -1))))
 
 (defn walk [config start-pos]
-  (loop [queue [{:idx (:idx start-pos)
-                 :previous #{}
-                 :walked 0
-                 :unfound (->> config :keys (map :symbol) set)}]
+  (loop [queue (sorted-set-by estimated-cost-sort
+                              {:idx (:idx start-pos)
+                               :previous #{}
+                               :walked 0
+                               :unfound (->> config :keys (map :symbol) set)})
          solutions #{}
         ;  skipped #{}
          iterations 0]
+    ; (prn iterations queue)
     (if (seq queue)
       (let [state      (first queue)
+            queue      (disj queue state)
             pos        (-> config :input-map (get (:idx state)))
             new-key?   (is-new-key? state pos)
+            orig-path  (:previous state)
             state      (add-potential-key state pos)
             neighbours (accessible-neighbours config state pos)]
 
+        ; (println "\n" iterations "; queue" (count queue) "; path" orig-path)
         ; (when new-key?
-        ;   (prn "found key" (:symbol pos))
-        ;   (prn state pos)
-        ;   (println neighbours "\n"))
+        ;   (println "\tfound key" (:symbol pos)))
+        ; (prn state pos)
+        ;   ; (println neighbours "\n")
+        ; (print-parsed-map config (->> orig-path set))
+
+        ; (prn "queue:")
+        ; (mapv prn (apply conj queue neighbours))
+        ; (println "\n")
 
         (when (= (mod iterations 10000) 0)
           (prn iterations "intermediate; queue:" (count queue) solutions)
           (prn "first" state)
-          (->> queue (sort-by :estimated-cost) first (prn "sorted first"))
+          (mapv prn neighbours)
+          ; (->> queue (sort-by :estimated-cost) first (prn "sorted first"))
           (prn "last" (last queue)))
 
         (cond
@@ -219,18 +256,18 @@
               (print-parsed-map config (->> queue (map :idx) set))
               (println "\n first 3")
               (->> queue (take 3) (map prn) doall)
-              (println "\n sorted first 3")
-              (->> queue (sort-by :estimated-cost) (take 3) (map prn) doall)
+              ; (println "\n sorted first 3")
+              ; (->> queue (sort-by :estimated-cost) (take 3) (map prn) doall)
               (println "\n last 3")
               (->> queue (take-last 3) (map prn) doall)
-              (println "\n sorted last 3")
-              (->> queue (sort-by :estimated-cost) (take-last 3) (map prn) doall)
+              ; (println "\n sorted last 3")
+              ; (->> queue (sort-by :estimated-cost) (take-last 3) (map prn) doall)
               solutions)
 
           ; stop this path if there are shorter solutions already
           ; (solutions (:walked state))
           (some->> solutions sort first (>= (:walked state)))
-          (recur (rest queue)
+          (recur queue
                  solutions
                 ;  (conj skipped (dissoc state :walked))
                  (inc iterations))
@@ -239,23 +276,26 @@
           (-> state :unfound count (= 0))
           (do
             (prn iterations "found solution" state "; queue" (count queue))
-            (recur (->> queue
-                        rest
-                        (filter #(< (:walked %) (:walked state)))) ; clean up queue with less efficient paths
+            (recur queue
+                  ;  (->> queue
+                  ;       (filter #(< (:walked %) (:walked state)))) ; clean up queue with less efficient paths
                    (conj solutions (:walked state))
                   ;  skipped
                    (inc iterations)))
 
           ; stop at death end
           (not (seq neighbours))
-          (recur (rest queue)
-                 solutions
+          (do ;(prn "dead end" state (:neighbours pos))
+              ;(mapv prn (mapv #(get (:input-map config) %) (:neighbours pos)))
+              ;(println "\n")
+            (recur queue
+                   solutions
                 ;  (conj skipped (dissoc state :walked))
-                 (inc iterations))
+                   (inc iterations)))
 
           ; queue neighbours
           :else
-          (let [queue     (rest queue)
+          (let [;queue     queue
                 ; new-items (map #(do {:idx      (:idx %)
                 ;                      :previous (conj (:idx state))
                 ;                      :walked   (-> state :walked inc)
@@ -269,7 +309,8 @@
 
                 ; new-items neighbours
                 ; new-items (filter #(-> % (dissoc :walked) skipped not) new-items)
-                queue (add-new-items neighbours queue)
+                ; queue (add-new-items neighbours queue)
+                queue (apply conj queue neighbours)
                 ; queue (add-new-items queue neighbours)
                 ; queue (add-new-items queue new-items)
                 ; new-set (set new-items)
@@ -289,7 +330,7 @@
                    solutions
                   ;  skipped
                    (inc iterations)))))
-      (do (prn "finished!" iterations (:max-iters config))
+      (do (prn "finished!" iterations "/" (:max-iters config))
           solutions))))
 
 (defn find-shortest-path [config]
