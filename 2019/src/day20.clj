@@ -50,6 +50,19 @@
           tiles
           new-tiles))
 
+(defn set-edges [tiles]
+  (let [edges (set (apply concat
+                          (first tiles)
+                          (last tiles)
+                          (map first tiles)
+                          (map last tiles)))]
+    ; (mapv prn edges)
+    (update-tiles (fn [_ tile]
+                    (if (edges tile)
+                      (assoc tile :edge? true)
+                      tile))
+                  tiles)))
+
 (defn get-neighbour-positions
   "gets the locations of neighbour tiles that are not walls"
   [tiles [x y]]
@@ -72,7 +85,8 @@
 (defn make-portal [tiles tile]
   (let [neighbours (get-neighbours tiles tile)
         related (filter is-portal? neighbours)
-        name (->> (conj related tile)
+        portal-tiles (conj related tile)
+        name (->> portal-tiles
                   (map :symbol)
                   sort
                   (string/join ""))]
@@ -81,6 +95,7 @@
                             (filter is-path?)
                             (map :pos)
                             seq)
+           :edge? (->> portal-tiles (map :edge?) (some true?))
            :portal name)))
 
 (defn link-tile
@@ -104,6 +119,7 @@
       (if adjacent-portal
         (assoc tile
                :linked-portal (:portal adjacent-portal)
+               :edge?         (:edge? adjacent-portal)
                :neighbours    (->> (:neighbours tile)
                                    (remove #(= % (:pos adjacent-portal)))
                                    (#(conj % (:destination adjacent-portal)))))
@@ -141,6 +157,7 @@
                    (map-indexed parse-line)
                    vec
                    (update-tiles add-neighbours)
+                   set-edges
                    make-portals)]
     {:tiles     tiles
      :max-iters 50000 ; (* 50 (count map-str))
@@ -157,6 +174,8 @@
 ;
 
 (defn print-parsed-map [config highlighted-positions]
+  (prn "portals:")
+  (mapv prn (:portals config))
   (->> config
        :tiles
        (update-tiles #(if (highlighted-positions (:pos %2))
@@ -210,6 +229,8 @@
                                   (filter !nil?)
                                   (filter #(-> % walked not))
                                   (map #(do {:pos % :walked walked})))]
+              ; (when (:edge? tile) (prn "jump on edge"))
+              ; (when (:linked-portal tile) (prn "jump in" (:linked-portal tile)  (:edge? tile)))
               (recur (concat neighbours (rest queue))
                      solutions
                      iterations))))
@@ -223,9 +244,67 @@
       time))
 
 ;
-; INPUT
+; PART1
 ;
 
 (def example1 (delay (find-shortest-path (parse-file "example20a.txt")))) ; 23
 (def example2 (delay (find-shortest-path (parse-file "example20b.txt")))) ; 58
-(def answer1  (delay (find-shortest-path (parse-file "input20.txt")))) ; ?
+(def answer1  (delay (find-shortest-path (parse-file "input20.txt")))) ; 638
+
+;
+; PART 2
+;
+
+(defn walk-with-depths [{:keys [tiles max-iters] :as config}]
+  (let [entrance (find-portal config "AA")
+        exit     (find-portal config "ZZ")]
+    (loop [queue      (list {:pos (:pos entrance)
+                             :walked [#{}]
+                             :depth 0})
+           solutions  (sorted-set)
+           iterations 0]
+      ; (prn iterations (count queue) (first queue))
+      (if (seq queue)
+        (let [{:keys [walked pos depth]} (first queue)
+              tile (get-tile tiles pos)
+              iterations (inc iterations)]
+          (cond
+            (= iterations max-iters)
+            (do (prn "halt!")
+                solutions)
+
+            ; found-exit?
+            (and (= tile exit)
+                 (= depth 0))
+            (recur (rest queue)
+                   (conj solutions (map count walked))
+                   iterations)
+
+            ; is-dead-end?
+            (-> tile :neighbours count (= 1))
+            (recur (rest queue) solutions iterations)
+
+            ; lets the walk the neighbours
+            :else
+            (let [walked (update-in walked [depth] #(conj % pos))
+                  neighbours (->> tile
+                                  :neighbours
+                                  (filter !nil?)
+                                  (filter #(-> % walked not))
+                                  (map #(do {:pos % :walked walked})))]
+              ; (when (:edge? tile) (prn "jump on edge"))
+              ; (when (:linked-portal tile) (prn "jump in" (:linked-portal tile)  (:edge? tile)))
+              (recur (concat neighbours (rest queue))
+                     solutions
+                     iterations))))
+        (do (prn "solved in" iterations)
+            solutions)))))
+
+(defn find-shortest-path-with-depths [config]
+  ; (clojure.pprint/pprint config)
+  (print-parsed-map config #{})
+  (-> (walk config)
+      time))
+
+(def example3 (delay (find-shortest-path-with-depths (parse-file "example20c.txt")))) ; 58
+(def answer2  (delay (find-shortest-path-with-depths (parse-file "input20.txt")))) ; ?
