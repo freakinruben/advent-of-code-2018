@@ -1,33 +1,19 @@
 (ns day9
-  (:require [day2 :refer [execute-code
-                          memory-to-vec
-                          parse-codes
-                          parse-file
-                          run
-                          read-next-arg]]
-            [day5]))
+  (:require intcode))
 
-(def numbers (delay (parse-file "input9.txt")))
+(def numbers (delay (intcode/parse-file "input9.txt")))
 
-; Opcode 9 adjusts the relative base by the value of its only parameter. The 
-; relative base increases (or decreases, if the value is negative) by the value 
-; of the parameter.
-(defmethod execute-code 9 [{:keys [relative-base] :as config} _ modes]
-  (let [arg1 (read-next-arg config modes 0)]
-    ; (println "set relative base" relative-base arg1 modes "\n")
-    (assoc config :relative-base (+ relative-base arg1))))
-
-(def example1 (parse-codes "109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99"))
-(def example2 (parse-codes "1102,34915192,34915192,7,4,7,99,0"))
-(def example3 (parse-codes "104,1125899906842624,99"))
+(def example1 (intcode/parse-codes "109,1,204,-1,1001,100,1,100,1008,100,16,101,1006,101,0,99"))
+(def example2 (intcode/parse-codes "1102,34915192,34915192,7,4,7,99,0"))
+(def example3 (intcode/parse-codes "104,1125899906842624,99"))
 
 (defn run-tests []
-  (let [run1 (run example1)]
+  (let [run1 (intcode/run example1)]
     (prn run1)
-    (assert (= (memory-to-vec example1)
+    (assert (= (intcode/memory-to-vec example1)
                (:output run1))))
-  (prn "example 2 prints 16-digit nr?" (run example2))
-  (prn "example 3 prints large nr in middle?" (run example3)))
+  (prn "example 2 prints 16-digit nr?" (intcode/run example2))
+  (prn "example 3 prints large nr in middle?" (intcode/run example3)))
 
-(def answer1 (-> @numbers (run 1) :output first delay))
-(def answer2 (-> @numbers (run 2) :output delay))
+(def answer1 (-> @numbers (intcode/run 1) :output first delay))
+(def answer2 (-> @numbers (intcode/run 2) :output delay))
