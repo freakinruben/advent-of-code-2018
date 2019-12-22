@@ -1,55 +1,20 @@
 (ns day20
-  (:require [clojure.string :as string]))
-
-(defn !nil? [x] (not= nil x))
-
-;
-; IDENTIFYING TILES
-;
-
-(defn tile-is? [symbol tile]
-  (-> tile :symbol (= symbol)))
-
-(def is-wall? (partial tile-is? "#"))
-(def is-path? (partial tile-is? "."))
-(def is-void? (partial tile-is? " "))
-
-(defn is-accessible? [tile]
-  (not (or (is-void? tile)
-           (is-wall? tile))))
-
-(defn is-portal? [tile]
-  (let [c (-> tile :symbol (.charAt 0) int)]
-    (and (>= c (int \A))
-         (<= c (int \Z)))))
-
-(defn get-tile [tiles [x y :as pos]]
-  (and pos
-       (some-> tiles (nth y nil) (nth x nil))))
-
-;
-; PARSING
-;
-
-(defn update-tiles [tile-fn tiles]
-  (mapv (fn [row]
-          (mapv (partial tile-fn tiles) row))
-        tiles))
-
-(defn filter-tiles [filter-fn tiles]
-  (->> tiles
-       (map #(filter filter-fn %))
-       (apply concat)))
-
-(defn some-tiles [some-fn tiles]
-  (some (fn [coll]
-          (some #(when (some-fn %) %) coll))
-        tiles))
-
-(defn set-tiles [new-tiles tiles]
-  (reduce #(assoc-in %1 (-> %2 :pos reverse) %2)
-          tiles
-          new-tiles))
+  (:require [clojure.string :as string]
+            [pathfinder :refer [!nil?
+                                empty-queue?
+                                filter-tiles
+                                is-path?
+                                is-portal?
+                                get-neighbours
+                                get-tile
+                                parse-file
+                                print-parsed-map
+                                run-halt?
+                                run-has-better-solution?
+                                run-queue-neighbours-bfs
+                                set-tiles
+                                some-tiles
+                                update-tiles]]))
 
 (defn set-edges [tiles]
   (let [edges (set (apply concat
@@ -63,25 +28,6 @@
                       (assoc tile :edge? true)
                       tile))
                   tiles)))
-
-(defn get-neighbour-positions
-  "gets the locations of neighbour tiles that are not walls"
-  [tiles [x y]]
-  (->> [[x (- y 1)] [x (+ y 1)] [(- x 1) y] [(+ x 1) y]]
-       (map (partial get-tile tiles))
-       (filter #(some-> % is-accessible?))
-       (map :pos)
-       seq))
-
-(defn add-neighbours [tiles tile]
-  (if (is-accessible? tile)
-    (assoc tile :neighbours (get-neighbour-positions tiles (:pos tile)))
-    tile))
-
-(defn get-neighbours [tiles tile]
-  (->> tile
-       :neighbours
-       (map (partial get-tile tiles))))
 
 (defn make-portal [tiles tile]
   (let [neighbours (get-neighbours tiles tile)
@@ -144,43 +90,15 @@
          (set-tiles linked-portals)
          (update-tiles add-jumps))))
 
-(defn parse-tile [y x symbol]
-  {:symbol symbol
-   :pos [x y]})
-
-(defn parse-line [line-nr line-str]
-  (->> line-str
-       (#(string/split % #""))
-       (map-indexed (partial parse-tile line-nr))
-       vec))
-
 (defn parse-map [map-str]
   (->> map-str
-       (#(string/split % #"\n"))
-       (map-indexed parse-line)
-       vec
-       (update-tiles add-neighbours)
+       pathfinder/parse-map
        set-edges
        make-portals))
-
-(defn parse-file [file]
-  (->> file
-       clojure.java.io/resource
-       slurp
-       parse-map))
 
 ;
 ; DEBUG
 ;
-
-(defn print-parsed-map [tiles highlighted-positions]
-  (->> tiles
-       (update-tiles #(if (highlighted-positions (:pos %2))
-                        (assoc %2 :symbol "\033[1;31m*\033[0m")
-                        %2))
-       (map #(->> % (map :symbol) (string/join "")))
-       (string/join "\n")
-       println))
 
 (defn print-dept-map [tiles walked depth]
   (println "dept" depth (count walked))
@@ -202,37 +120,10 @@
 
 (def iterations (atom 0))
 
-(defn empty-queue? [_ {:keys [solutions step]}]
-  (when (not step)
-    (prn @iterations "finished queue!")
-    {:solutions solutions}))
-
-
-(defn run-halt? [_ {:keys [solutions queue]}]
-  (when (= @iterations 1000000)
-    (prn @iterations "halt! queue:" (count queue))
-    {:solutions solutions}))
-
 (defn run-is-exit? [_ {:keys [exit queue solutions step]}]
   (when (= (:pos step) exit)
     {:queue queue
      :solutions (conj solutions (:steps step))}))
-
-(defn run-has-better-solution? [_ {:keys [solutions step queue]}]
-  (when (some->> solutions first (> (:steps step)))
-    ; (prn "abort trial, better solution found..")
-    {:queue queue :solutions solutions}))
-
-(defn run-queue-neighbours1 [_ {:keys [queue solutions step tile]}]
-  (let [{:keys [walked steps pos]} step
-        walked (conj walked pos)
-        neighbours (->> tile
-                        :neighbours
-                        (filter !nil?)
-                        (filter (comp not walked))
-                        (map #(do {:pos % :walked walked :steps (inc steps)})))]
-    {:queue (concat neighbours queue)
-     :solutions solutions}))
 
 (defn walk [tiles]
   (reset! iterations 0)
@@ -253,8 +144,7 @@
                           run-halt?
                           run-is-exit?
                           run-has-better-solution?
-                          ; run-is-dead-end?
-                          run-queue-neighbours1])]
+                          run-queue-neighbours-bfs])]
         (if (-> result :queue nil?)
           (:solutions result)
           (recur (:solutions result) (:queue result)))))))
@@ -302,7 +192,7 @@
               (> depth 100))
       (select-keys state [:solutions :queue]))))
 
-(defn run-queue-neighbours2 [tiles {:keys [queue solutions step tile]}]
+(defn run-queue-neighbours-weighted [tiles {:keys [queue solutions step tile]}]
   ; (prn tile)
   (let [{:keys [walked steps pos]} step
         walked (conj walked pos)
@@ -342,9 +232,8 @@
                           run-halt?
                           run-is-exit2?
                           run-has-better-solution?
-                          ; run-is-dead-end?
                           run-check-depth
-                          run-queue-neighbours2])]
+                          run-queue-neighbours-weighted])]
         (if (-> result :queue nil?)
           (do (:solutions result))
           (recur (:solutions result) (:queue result)))))))

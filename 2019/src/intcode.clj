@@ -91,12 +91,16 @@
 ; the first item from the list and then remove it from the available inputs
 (defmethod execute-code 3 [{:keys [input] :as config} _ modes]
   (assert (not= nil input))
-  (if (seq input)
-    ; (do (println "write input" (first input) "\n")
+  (cond
+    (coll? input)
     (-> config
         (write-result (first input) modes 0)
         (assoc :input (rest input))) ; remove read item from input
-    ; (do (println "write input" input "\n")
+
+    (fn? input)
+    nil
+
+    :else
     (write-result config input modes 0)))
 
 ; Opcode 4 outputs the value of its only parameter. For example, the instruction 

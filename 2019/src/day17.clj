@@ -1,12 +1,9 @@
 (ns day17
-  (:require [day2 :refer [parse-file
-                          run]]
-            [day5]
-            [day9]))
+  (:require intcode))
 
-(defonce numbers (delay (parse-file "input17.txt")))
+(defonce numbers (delay (intcode/parse-file "input17.txt")))
 
-(defonce camera-output (-> @numbers run :output time delay))
+(defonce camera-output (-> @numbers intcode/run :output time delay))
 
 (defn draw-camera-output [output]
   (->> output
@@ -281,7 +278,7 @@
                          time)]
      (-> @numbers
          wake-up-robot
-         (run inputs)
+         (intcode/run inputs)
          :output
          last
          time))))
